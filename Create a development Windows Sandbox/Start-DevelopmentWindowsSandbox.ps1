@@ -1,6 +1,11 @@
+#https://powershellisfun.com/2024/08/02/creating-a-development-windows-sandbox-using-powershell-and-winget/ based on
 param(
-    [parameter(Mandatory = $false)][string]$MappedFolder = 'C:\WindowsSandbox',
-    [parameter(Mandatory = $false)][string]$LogonCommand = 'Install_WinGet_and_Software.ps1'
+    [parameter(Mandatory = $false)][string]$MappedFolder = 'D:\_Test',
+	[parameter(Mandatory = $false)][string]$SandboxFolder = 'c:\_Packaging',
+	[parameter(Mandatory = $false)][string]$ToolFolder = 'D:\_tools',
+	[parameter(Mandatory = $false)][string]$SandBoxToolFolder = 'C:\_tools',
+    [parameter(Mandatory = $false)][string]$LogonCommand = 'install-Winget-Sandbox.ps1',
+	[parameter(Mandatory = $false)][string]$PSAPP = 'Invoke-AppDeployToolkit.ps1'
 )
 
 #Check if Windows Sandbox is already running. Exit if yes
@@ -20,10 +25,21 @@ if ($MappedFolder) {
     }
 }
 
+#Validate if $mappedfolder exists
+if ($ToolFolder) {
+    if (Test-Path $ToolFolder -ErrorAction SilentlyContinue) {
+        Write-Host ("Specified {0} path exists, continuing..." -f $ToolFolder) -ForegroundColor Green
+    }
+    else {
+        Write-Warning ("Specified {0} path doesn't exist, exiting..." -f $ToolFolder)
+        return
+    }
+}
+
 #Create .wsb config file, overwrite  existing file if present and check if specified logoncommand exist
-$wsblocation = "$($MappedFolder)\WindowsSandbox.wsb"
-if (-not (Test-Path "$($MappedFolder)\$($LogonCommand)")) {
-    Write-Warning ("Specified LogonCommand {0} doesn't exist in {1}, exiting..." -f $MappedFolder, $LogonCommand)
+$wsblocation = "$($ToolFolder)\WindowsSandbox.wsb"
+if (-not (Test-Path "$($ToolFolder)\$($LogonCommand)")) {
+    Write-Warning ("Specified LogonCommand {0} doesn't exist in {1}, exiting..." -f $ToolFolder, $LogonCommand)
     return
 }
 
@@ -34,13 +50,24 @@ $wsb += "<Configuration>"
 $wsb += "<MappedFolders>"
 $wsb += "<MappedFolder>"
 $wsb += "<HostFolder>$($MappedFolder)</HostFolder>"
+$wsb += "<SandboxFolder>$($SandboxFolder)</SandboxFolder>"
+$wsb += "<ReadOnly>true</ReadOnly>"
+$wsb += "</MappedFolder>"
+
+$wsb += "<MappedFolder>"
+$wsb += "<HostFolder>$($ToolFolder)</HostFolder>"
+$wsb += "<SandboxFolder>$($SandboxToolFolder)</SandboxFolder>"
 $wsb += "<ReadOnly>true</ReadOnly>"
 $wsb += "</MappedFolder>"
 $wsb += "</MappedFolders>"
 
-$LogonCommandFull = 'Powershell.exe -ExecutionPolicy bypass -File C:\users\wdagutilityaccount\desktop\' + $(Get-childitem -Path $($wsblocation) -Directory).Directory.Name + '\' + $logoncommand
+$LogonCommandFull = 'Powershell.exe -ExecutionPolicy bypass -File ' + '"C:\' + $(Get-childitem -Path $($wsblocation) -Directory).Directory.Name + '\' + $logoncommand + '"'
+$LogonCommandScript = 'cmd.exe /c start PWSH.exe -ExecutionPolicy bypass -NoExit -File ' + '"' + $SandboxFolder + '\' + $PSAPP + '"'
 $wsb += "<LogonCommand>"
+$wsb += "<Command>xcopy `"$($SandboxToolFolder)\notepad.exe`" `"C:\Windows\System32\`" /Y</Command>"
+$wsb += "<Command>xcopy `"$($SandboxToolFolder)\cmtrace.exe`" `"C:\Users\WDAGUtilityAccount\Desktop`"/Y</Command>"
 $wsb += "<Command>$($LogonCommandFull)</Command>"
+$wsb += "<Command>$($LogonCommandScript)</Command>"
 $wsb += "</LogonCommand>"
 
 $wsb += "</Configuration>"
